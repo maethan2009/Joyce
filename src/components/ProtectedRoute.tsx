@@ -16,7 +16,7 @@ export function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
 
   if (isLoadingAuth) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">
+      <div className="flex min-h-screen items-center justify-center bg-white dark:bg-zinc-950 text-sm text-zinc-500 dark:text-zinc-400">
         Chargement de la session…
       </div>
     );

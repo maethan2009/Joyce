@@ -8,4 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Attention : Les clés Supabase sont manquantes dans les variables d\'environnement.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key'
+);

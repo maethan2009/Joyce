@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AppUser, Profile, UserRole } from '@/types';
 import { authService } from '@/services';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 type Theme = 'light' | 'dark';
 
@@ -11,6 +11,51 @@ interface Toast {
   type: 'success' | 'error' | 'info';
   message: string;
 }
+
+export function getDefaultRouteForRole(role?: UserRole | null): string {
+  switch (role) {
+    case 'super_admin':
+      return '/admin';
+    case 'school_admin':
+      return '/school';
+    case 'pro_recruiter':
+      return '/pro';
+    default:
+      return '/dashboard';
+  }
+}
+
+function buildFallbackProfile(user: AppUser): Profile {
+  const now = new Date().toISOString();
+  const displayName = user.full_name?.trim() || user.email.split('@')[0] || 'Utilisateur';
+  return {
+    id: user.id,
+    matricule: null,
+    full_name: displayName,
+    role: user.role ?? 'student_free',
+    filiere: null,
+    niveau: null,
+    school_id: null,
+    account_status: 'approved',
+    company_name: null,
+    bio: null,
+    headline: null,
+    skills: [],
+    website_url: null,
+    avatar_url: user.avatar_url ?? null,
+    totp_secret: null,
+    totp_enrolled_at: null,
+    interests: [],
+    is_mentor_opt_in: false,
+    validated_by: null,
+    validated_at: null,
+    created_at: now,
+    updated_at: now,
+    school: null,
+  };
+}
+
+let authSubscriptionBound = false;
 
 interface AppState {
   user: AppUser | null;
@@ -52,10 +97,17 @@ export const useAppStore = create<AppState>()(
 
       signIn: async (email, password) => {
         const user = await authService.signIn(email, password);
-        set({ user });
-        const profile = await authService.getProfile(user.id);
-        set({ profile });
-        return profile ?? ({} as Profile);
+        let profile = await authService.getProfile(user.id);
+        if (!profile) {
+          profile = buildFallbackProfile(user);
+        }
+        if (profile.account_status === 'rejected') {
+          await authService.signOut().catch(() => undefined);
+          set({ user: null, profile: null });
+          throw new Error('Votre compte a été refusé par l’administration.');
+        }
+        set({ user, profile });
+        return profile;
       },
 
       signUpFree: async (email, password, fullName) => {
@@ -63,21 +115,20 @@ export const useAppStore = create<AppState>()(
           full_name: fullName,
           role: 'student_free',
         });
-        // Ensure session after signup when email confirm is disabled
         try {
           await authService.signIn(email, password);
         } catch {
-          /* email confirmation may be required */
+          /* Email confirmation may be required by project settings */
         }
         const sessionUser = (await authService.getSessionUser()) ?? user;
-        set({ user: sessionUser });
         let profile = await authService.getProfile(sessionUser.id);
         if (!profile) {
           await new Promise((r) => setTimeout(r, 400));
           profile = await authService.getProfile(sessionUser.id);
         }
-        set({ profile });
-        return profile ?? ({} as Profile);
+        const resolvedProfile = profile ?? buildFallbackProfile(sessionUser);
+        set({ user: sessionUser, profile: resolvedProfile });
+        return resolvedProfile;
       },
 
       signUpRole: async (email, password, fullName, role, companyName) => {
@@ -89,13 +140,17 @@ export const useAppStore = create<AppState>()(
         try {
           await authService.signIn(email, password);
         } catch {
-          /* email confirmation */
+          /* Email confirmation may be required */
         }
         const sessionUser = (await authService.getSessionUser()) ?? user;
-        set({ user: sessionUser });
-        const profile = await authService.getProfile(sessionUser.id);
-        set({ profile });
-        return profile ?? ({} as Profile);
+        let profile = await authService.getProfile(sessionUser.id);
+        if (!profile) {
+          await new Promise((r) => setTimeout(r, 400));
+          profile = await authService.getProfile(sessionUser.id);
+        }
+        const resolvedProfile = profile ?? buildFallbackProfile(sessionUser);
+        set({ user: sessionUser, profile: resolvedProfile });
+        return resolvedProfile;
       },
 
       enrollAndActivate: async (email, password, matricule, fullName) => {
@@ -110,9 +165,9 @@ export const useAppStore = create<AppState>()(
         }
         const sessionUser = (await authService.getSessionUser()) ?? user;
         await authService.activateStudent(sessionUser.id, matricule, fullName);
-        const profile = await authService.getProfile(sessionUser.id);
+        const profile = (await authService.getProfile(sessionUser.id)) ?? buildFallbackProfile(sessionUser);
         set({ user: sessionUser, profile });
-        return profile ?? ({} as Profile);
+        return profile;
       },
 
       signOut: async () => {
@@ -128,13 +183,40 @@ export const useAppStore = create<AppState>()(
         const { user } = get();
         if (!user) return;
         const profile = await authService.getProfile(user.id);
-        set({ profile });
+        if (profile) {
+          set({ profile });
+        }
       },
 
       setSession: (user) => set({ user }),
 
       bootstrapSession: async () => {
         if (!isSupabaseConfigured) return;
+
+        if (!authSubscriptionBound) {
+          authSubscriptionBound = true;
+          supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_OUT' || !session?.user) {
+              set({ user: null, profile: null });
+              return;
+            }
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+              const nextUser: AppUser = {
+                id: session.user.id,
+                email: session.user.email ?? '',
+                full_name: (session.user.user_metadata?.full_name as string | undefined) ?? null,
+                role: session.user.user_metadata?.role as UserRole | undefined,
+              };
+              const fetchedProfile = await authService.getProfile(nextUser.id);
+              const currentProfile = get().profile;
+              set({
+                user: nextUser,
+                profile: fetchedProfile ?? (currentProfile?.id === nextUser.id ? currentProfile : buildFallbackProfile(nextUser)),
+              });
+            }
+          });
+        }
+
         set({ isLoadingAuth: true });
         try {
           const user = await authService.getSessionUser();
@@ -142,7 +224,12 @@ export const useAppStore = create<AppState>()(
             set({ user: null, profile: null });
             return;
           }
-          const profile = await authService.getProfile(user.id);
+          const profile = (await authService.getProfile(user.id)) ?? buildFallbackProfile(user);
+          if (profile.account_status === 'rejected') {
+            await authService.signOut().catch(() => undefined);
+            set({ user: null, profile: null });
+            return;
+          }
           set({ user, profile });
         } finally {
           set({ isLoadingAuth: false });

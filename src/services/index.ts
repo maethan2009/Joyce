@@ -4,6 +4,7 @@ import type {
   AcademicGrade,
   AcademicModule,
   AcademicResource,
+  AppNotification,
   AppUser,
   Candidate,
   Career,
@@ -28,9 +29,31 @@ import type {
 
 function requireClient() {
   if (!isSupabaseConfigured) {
-    throw new Error('Supabase non configuré. Définissez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY.');
+    throw new Error('Connexion Supabase non configurée (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).');
   }
   return supabase;
+}
+
+function translateAuthError(message?: string): string {
+  if (!message) return 'Une erreur d’authentification est survenue.';
+  const m = message.toLowerCase();
+  if (m.includes('invalid login credentials')) return 'Email ou mot de passe incorrect.';
+  if (m.includes('email not confirmed')) {
+    return 'Votre adresse email n’est pas encore confirmée. Vérifiez votre boîte de réception.';
+  }
+  if (m.includes('user already registered') || m.includes('already registered')) {
+    return 'Un compte existe déjà avec cette adresse email.';
+  }
+  if (m.includes('password should be at least')) {
+    return 'Le mot de passe doit contenir au moins 6 caractères.';
+  }
+  if (m.includes('too many requests') || m.includes('rate limit')) {
+    return 'Trop de tentatives. Veuillez patienter quelques instants avant de réessayer.';
+  }
+  if (m.includes('network') || m.includes('fetch')) {
+    return 'Impossible de joindre le serveur d’authentification. Vérifiez votre connexion.';
+  }
+  return message;
 }
 
 function mapError(err: { message?: string } | null, fallback: string): never {
@@ -41,8 +64,8 @@ export const authService = {
   async verifyEligibility(matricule: string, email: string): Promise<boolean> {
     const client = requireClient();
     const { data, error } = await client.rpc('verify_eligibility', {
-      p_matricule: matricule,
-      p_email: email,
+      p_matricule: matricule.trim(),
+      p_email: email.trim().toLowerCase(),
     });
     if (error) mapError(error, 'Vérification d’éligibilité impossible');
     return Boolean(data);
@@ -54,8 +77,9 @@ export const authService = {
     meta?: { full_name?: string; role?: UserRole; company_name?: string },
   ): Promise<AppUser> {
     const client = requireClient();
+    const cleanEmail = email.trim();
     const { data, error } = await client.auth.signUp({
-      email,
+      email: cleanEmail,
       password,
       options: {
         data: {
@@ -65,15 +89,33 @@ export const authService = {
         },
       },
     });
-    if (error || !data.user) mapError(error, 'Inscription impossible');
-    return { id: data.user.id, email: data.user.email ?? email };
+    if (error || !data.user) {
+      throw new Error(translateAuthError(error?.message));
+    }
+    return {
+      id: data.user.id,
+      email: data.user.email ?? cleanEmail,
+      full_name: (data.user.user_metadata?.full_name as string | undefined) ?? meta?.full_name ?? null,
+      role: (data.user.user_metadata?.role as UserRole | undefined) ?? meta?.role,
+    };
   },
 
   async signIn(email: string, password: string): Promise<AppUser> {
     const client = requireClient();
-    const { data, error } = await client.auth.signInWithPassword({ email, password });
-    if (error || !data.user) mapError(error, 'Connexion impossible');
-    return { id: data.user.id, email: data.user.email ?? email };
+    const cleanEmail = email.trim();
+    const { data, error } = await client.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+    if (error || !data.user) {
+      throw new Error(translateAuthError(error?.message));
+    }
+    return {
+      id: data.user.id,
+      email: data.user.email ?? cleanEmail,
+      full_name: (data.user.user_metadata?.full_name as string | undefined) ?? null,
+      role: data.user.user_metadata?.role as UserRole | undefined,
+    };
   },
 
   async signOut(): Promise<void> {
@@ -81,12 +123,18 @@ export const authService = {
     await client.auth.signOut();
   },
 
+  async updatePassword(newPassword: string): Promise<void> {
+    const client = requireClient();
+    const { error } = await client.auth.updateUser({ password: newPassword });
+    if (error) throw new Error(translateAuthError(error.message));
+  },
+
   async activateStudent(userId: string, matricule: string, fullName: string): Promise<void> {
     const client = requireClient();
     void userId;
     const { error } = await client.rpc('activate_student', {
-      p_matricule: matricule,
-      p_full_name: fullName,
+      p_matricule: matricule.trim(),
+      p_full_name: fullName.trim(),
     });
     if (error) mapError(error, 'Activation du matricule impossible');
   },
@@ -98,25 +146,43 @@ export const authService = {
       .select('*, school:schools(*)')
       .eq('id', userId)
       .maybeSingle();
-    if (error) mapError(error, 'Profil introuvable');
-    return (data as Profile | null) ?? null;
+
+    if (!error) {
+      return (data as Profile | null) ?? null;
+    }
+
+    // Fallback without school join if RLS or foreign relation prevents joining
+    const { data: plainData, error: plainError } = await client
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (plainError) {
+      console.warn('Profil Supabase indisponible:', plainError.message);
+      return null;
+    }
+    return (plainData as Profile | null) ?? null;
   },
 
   async updateProfile(userId: string, updates: Partial<Profile>): Promise<Profile> {
     const client = requireClient();
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (updates.full_name !== undefined) payload.full_name = updates.full_name;
+    if (updates.avatar_url !== undefined) payload.avatar_url = updates.avatar_url;
+    if (updates.bio !== undefined) payload.bio = updates.bio;
+    if (updates.headline !== undefined) payload.headline = updates.headline;
+    if (updates.skills !== undefined) payload.skills = updates.skills;
+    if (updates.website_url !== undefined) payload.website_url = updates.website_url;
+    if (updates.interests !== undefined) payload.interests = updates.interests;
+    if (updates.is_mentor_opt_in !== undefined) payload.is_mentor_opt_in = updates.is_mentor_opt_in;
+    if (updates.company_name !== undefined) payload.company_name = updates.company_name;
+    if (updates.filiere !== undefined) payload.filiere = updates.filiere;
+    if (updates.niveau !== undefined) payload.niveau = updates.niveau;
+
     const { data, error } = await client
       .from('profiles')
-      .update({
-        full_name: updates.full_name,
-        avatar_url: updates.avatar_url,
-        bio: updates.bio,
-        headline: updates.headline,
-        skills: updates.skills,
-        website_url: updates.website_url,
-        interests: updates.interests,
-        is_mentor_opt_in: updates.is_mentor_opt_in,
-        company_name: updates.company_name,
-      })
+      .update(payload)
       .eq('id', userId)
       .select('*, school:schools(*)')
       .single();
@@ -128,15 +194,56 @@ export const authService = {
     const client = requireClient();
     void userId;
     const { error } = await client.rpc('enroll_totp', { p_secret: secret });
-    if (error) mapError(error, 'Enrollment TOTP impossible');
+    if (error) mapError(error, 'Enrôlement TOTP impossible');
+  },
+
+  async listApprovedProfiles(): Promise<Profile[]> {
+    const client = requireClient();
+    const { data, error } = await client
+      .from('profiles')
+      .select('*')
+      .eq('account_status', 'approved')
+      .order('full_name');
+    if (error) mapError(error, 'Liste des membres indisponible');
+    return (data as Profile[]) ?? [];
   },
 
   async getSessionUser(): Promise<AppUser | null> {
     const client = requireClient();
-    const { data } = await client.auth.getSession();
+    const { data, error } = await client.auth.getSession();
+    if (error) return null;
     const u = data.session?.user;
     if (!u) return null;
-    return { id: u.id, email: u.email ?? '' };
+    return {
+      id: u.id,
+      email: u.email ?? '',
+      full_name: (u.user_metadata?.full_name as string | undefined) ?? null,
+      role: u.user_metadata?.role as UserRole | undefined,
+    };
+  },
+};
+
+export const notificationsService = {
+  async listMine(userId: string): Promise<AppNotification[]> {
+    const client = requireClient();
+    const { data, error } = await client
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) return [];
+    return (data as AppNotification[]) ?? [];
+  },
+
+  async markAsRead(notificationId: string): Promise<void> {
+    const client = requireClient();
+    await client.from('notifications').update({ is_read: true }).eq('id', notificationId);
+  },
+
+  async markAllAsRead(userId: string): Promise<void> {
+    const client = requireClient();
+    await client.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false);
   },
 };
 
@@ -173,8 +280,9 @@ export const electionService = {
     return Boolean(data?.has_voted);
   },
 
-  async castBallot(electionId: string, candidateId: string, _userId: string): Promise<{ success: true }> {
+  async castBallot(electionId: string, candidateId: string, _userId?: string): Promise<{ success: true }> {
     const client = requireClient();
+    void _userId;
     const { error } = await client.rpc('cast_ballot', {
       p_election_id: electionId,
       p_candidate_id: candidateId,
@@ -310,6 +418,28 @@ export const academicService = {
     if (error) mapError(error, 'Certifications indisponibles');
     return (data as Certification[]) ?? [];
   },
+
+  async requestCertification(input: {
+    student_id: string;
+    course_id?: string | null;
+    title: string;
+    skills: string[];
+  }): Promise<Certification> {
+    const client = requireClient();
+    const { data, error } = await client
+      .from('certifications')
+      .insert({
+        student_id: input.student_id,
+        course_id: input.course_id ?? null,
+        title: input.title,
+        skills: input.skills,
+        status: 'pending',
+      })
+      .select('*')
+      .single();
+    if (error) mapError(error, 'Demande de certification impossible');
+    return data as Certification;
+  },
 };
 
 export const skillService = {
@@ -323,6 +453,10 @@ export const skillService = {
     const { data, error } = await q;
     if (error) mapError(error, 'Offres SkillLink indisponibles');
     return (data as SkillOffer[]) ?? [];
+  },
+
+  async listTalentProfiles(): Promise<Profile[]> {
+    return authService.listApprovedProfiles();
   },
 
   async createOffer(
@@ -552,7 +686,8 @@ export const socialService = {
       .select('follower:profiles!social_follows_follower_id_fkey(*)')
       .eq('following_id', userId);
     if (error) mapError(error, 'Abonnés indisponibles');
-    return (data?.map((r) => r.follower).filter(Boolean) as Profile[]) ?? [];
+    const rows = (data ?? []) as Array<{ follower: Profile | Profile[] | null }>;
+    return rows.flatMap((r) => (Array.isArray(r.follower) ? r.follower : r.follower ? [r.follower] : []));
   },
 
   async listFollowing(userId: string): Promise<Profile[]> {
@@ -562,7 +697,8 @@ export const socialService = {
       .select('following:profiles!social_follows_following_id_fkey(*)')
       .eq('follower_id', userId);
     if (error) mapError(error, 'Abonnements indisponibles');
-    return (data?.map((r) => r.following).filter(Boolean) as Profile[]) ?? [];
+    const rows = (data ?? []) as Array<{ following: Profile | Profile[] | null }>;
+    return rows.flatMap((r) => (Array.isArray(r.following) ? r.following : r.following ? [r.following] : []));
   },
 };
 

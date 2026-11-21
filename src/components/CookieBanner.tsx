@@ -17,12 +17,12 @@ export function CookieBanner() {
       aria-label="Consentement aux cookies"
       className="fixed inset-x-0 bottom-0 z-[60] p-4 sm:p-6"
     >
-      <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-5 sm:p-6">
-        <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">
+      <div className="mx-auto max-w-3xl rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-cabinet p-5 sm:p-6">
+        <h2 className="font-display text-sm font-bold text-zinc-950 dark:text-zinc-50">
           Cookies & mesure d’audience
         </h2>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-          Nous utilisons uniquement des cookies essentiels au fonctionnement, et des cookies
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+          Nous utilisons uniquement des cookies essentiels au fonctionnement de la session, et des cookies
           d’audience non essentiels uniquement avec votre accord explicite. Consultez la{' '}
           <Link to="/legal" className="text-brand-600 dark:text-brand-400 font-semibold underline-offset-2 hover:underline">
             Politique de confidentialité

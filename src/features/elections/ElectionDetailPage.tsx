@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, CheckCircle2, Vote, BarChart3, Lock, ShieldCheck, ExternalLink, FileText, AlertTriangle } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Vote,
+  BarChart3,
+  Lock,
+  ShieldCheck,
+  ExternalLink,
+  FileText,
+  AlertTriangle,
+} from 'lucide-react';
 import { electionService } from '@/services';
 import { useAppStore } from '@/store/useAppStore';
 import type { Candidate, Election } from '@/types';
@@ -51,15 +61,17 @@ export function ElectionDetailPage() {
             setHasVoted(voterStatus);
           }
         }
-      } catch (error) {
-        console.error('Erreur lors du chargement de l\'élection :', error);
+      } catch {
+        if (isMounted) setElection(null);
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    loadElectionData();
-    return () => { isMounted = false; };
+    void loadElectionData();
+    return () => {
+      isMounted = false;
+    };
   }, [id, user?.id]);
 
   const handleVote = async () => {
@@ -70,7 +82,7 @@ export function ElectionDetailPage() {
       setHasVoted(true);
       setSelectedCandidate(null);
       setShowConfirm(false);
-      addToast('success', 'Votre bulletin chiffré a été déposé dans l’urne en toute confidentialité.');
+      addToast('success', 'Votre bulletin a été déposé dans l’urne en toute confidentialité.');
     } catch (err) {
       addToast('error', err instanceof Error ? err.message : 'Échec lors de l’enregistrement du vote.');
     } finally {
@@ -80,7 +92,7 @@ export function ElectionDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-12 space-y-6">
+      <div className="mx-auto max-w-4xl px-4 py-10 space-y-4">
         <CardSkeleton />
         <CardSkeleton />
       </div>
@@ -89,10 +101,13 @@ export function ElectionDetailPage() {
 
   if (!election) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-12">
-        <Card className="p-8 text-center rounded-3xl border border-white/20 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl">
-          <p className="text-slate-500 dark:text-slate-400 font-medium">Scrutin introuvable ou supprimé.</p>
-          <Link to="/elections" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-600 hover:underline">
+      <div className="mx-auto max-w-4xl px-4 py-10">
+        <Card className="p-8 text-center">
+          <p className="text-zinc-600 dark:text-zinc-400 font-medium">Scrutin introuvable ou supprimé.</p>
+          <Link
+            to="/elections"
+            className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-600 dark:text-brand-400 hover:underline"
+          >
             <ArrowLeft className="h-4 w-4" /> Retour aux scrutins
           </Link>
         </Card>
@@ -103,101 +118,118 @@ export function ElectionDetailPage() {
   const isOpen = election.status === 'open';
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 lg:px-8 space-y-8">
-      <Link to="/elections" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-brand-600 dark:text-slate-400 transition-colors">
+    <div className="mx-auto max-w-4xl px-4 py-8 lg:px-8 space-y-6">
+      <Link
+        to="/elections"
+        className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-600 hover:text-brand-600 dark:text-zinc-400 transition-colors"
+      >
         <ArrowLeft className="h-4 w-4" /> Retour aux scrutins
       </Link>
 
-      {/* En-tête du Scrutin Glassmorphism */}
-      <div className="rounded-3xl border border-white/20 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl p-8 shadow-2xl shadow-slate-900/5 space-y-5">
+      <header className="card-base p-6 sm:p-8 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">{election.title}</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-zinc-950 dark:text-white tracking-tight">
+            {election.title}
+          </h1>
           <Badge variant={election.status === 'open' ? 'success' : election.status === 'closed' ? 'warning' : 'neutral'}>
             {election.status === 'open' ? 'Scrutin ouvert' : election.status === 'closed' ? 'Scrutin clos' : election.status}
           </Badge>
         </div>
-        <p className="text-slate-600 dark:text-slate-400 text-base leading-relaxed">
+        <p className="text-zinc-600 dark:text-zinc-400 text-sm sm:text-base leading-relaxed">
           {election.description ?? 'Aucune description fournie.'}
         </p>
 
-        <div className="flex items-center gap-3 text-xs font-medium text-brand-700 dark:text-brand-300 bg-brand-500/10 px-4 py-3 rounded-2xl border border-brand-500/20 backdrop-blur-md w-full sm:w-fit">
-          <ShieldCheck className="h-5 w-5 text-brand-600 dark:text-brand-400 flex-shrink-0" />
-          <span>Garantie d'anonymat absolu : votre identité est complètement dissociée de votre suffrage.</span>
+        <div className="flex items-center gap-3 text-xs font-medium text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/40 px-4 py-3 rounded-lg border border-brand-200 dark:border-brand-900 w-full sm:w-fit">
+          <ShieldCheck className="h-4 w-4 text-brand-600 dark:text-brand-400 shrink-0" />
+          <span>Garantie d’anonymat : votre identité est dissociée de votre suffrage.</span>
         </div>
-      </div>
+      </header>
 
-      {/* Message de confirmation de vote */}
       {hasVoted && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-950/20 backdrop-blur-xl rounded-3xl p-6">
-            <div className="flex items-start gap-4">
-              <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
+          <Card className="border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-5">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-emerald-900 dark:text-emerald-300 text-base">Votre suffrage a été enregistré dans l'urne cryptographique.</p>
-                <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-1">Merci pour votre participation citoyenne au sein de l'institution.</p>
+                <p className="font-bold text-emerald-950 dark:text-emerald-200 text-sm">
+                  Votre suffrage a été enregistré dans l’urne.
+                </p>
+                <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">
+                  Merci pour votre participation.
+                </p>
               </div>
             </div>
           </Card>
         </motion.div>
       )}
 
-      {/* Titre section candidats & Résultats */}
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-display text-lg font-bold text-zinc-950 dark:text-white tracking-tight">
           Candidatures validées ({candidates.length})
         </h2>
-        <button onClick={() => navigate(`/elections/${election.id}/results`)} className="btn-secondary text-sm flex items-center gap-2 rounded-xl px-4 py-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/80 dark:border-slate-800">
-          <BarChart3 className="h-4 w-4 text-brand-600" /> {election.status === 'open' ? 'Suivre les résultats en direct' : 'Consulter les résultats officiels'}
+        <button
+          type="button"
+          onClick={() => navigate(`/elections/${election.id}/results`)}
+          className="btn-secondary text-xs"
+        >
+          <BarChart3 className="h-4 w-4 text-brand-600 dark:text-brand-400" />
+          {election.status === 'open' ? 'Résultats en direct' : 'Résultats officiels'}
         </button>
       </div>
 
       {!isOpen && !hasVoted && (
-        <Card className="rounded-3xl border border-slate-200/60 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-xl p-6">
-          <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
-            <Lock className="h-5 w-5 text-amber-500 flex-shrink-0" />
-            <span>Ce scrutin est actuellement <strong>{election.status}</strong>. Les votes ne sont pas ouverts.</span>
+        <Card className="p-5">
+          <div className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
+            <Lock className="h-5 w-5 text-amber-600 shrink-0" />
+            <span>
+              Ce scrutin est actuellement <strong>{election.status}</strong>. Les votes ne sont pas ouverts.
+            </span>
           </div>
         </Card>
       )}
 
-      {/* Grille des candidats */}
       <div className="grid gap-4 sm:grid-cols-2">
         {candidates.map((c, i) => {
           const isSelected = selectedCandidate?.id === c.id;
           return (
-            <motion.div key={c.id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+            <motion.div
+              key={c.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04, duration: 0.2 }}
+            >
               <Card
                 interactive={isOpen && !hasVoted}
                 onClick={() => isOpen && !hasVoted && setSelectedCandidate(c)}
-                className={`h-full relative transition-all rounded-3xl p-6 backdrop-blur-xl border ${
-                  isSelected 
-                    ? 'border-2 border-brand-600 bg-brand-500/5 dark:bg-brand-950/20 ring-4 ring-brand-500/10' 
-                    : 'border-white/40 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/60 hover:border-brand-500/40'
+                className={`h-full p-5 transition-colors ${
+                  isSelected
+                    ? 'border-2 border-brand-600 bg-brand-50/40 dark:bg-brand-950/20'
+                    : ''
                 }`}
               >
                 <div className="flex items-start gap-4">
-                  <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500/20 to-brand-700/20 text-xl font-extrabold text-brand-700 dark:text-brand-300 border border-brand-500/30">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-zinc-950 dark:bg-zinc-800 text-lg font-extrabold text-white">
                     {c.display_name.charAt(0)}
                   </div>
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">{c.display_name}</h3>
+                      <h3 className="font-display text-base font-bold text-zinc-950 dark:text-white">
+                        {c.display_name}
+                      </h3>
                       {isSelected && <Badge variant="brand">Sélectionné</Badge>}
                     </div>
 
                     {c.program_url && (
-                      <div className="pt-1">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setProgramCandidate(c);
-                          }}
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 transition-colors"
-                        >
-                          <FileText className="h-4 w-4" /> Consulter le programme & profession de foi
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setProgramCandidate(c);
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 transition-colors"
+                      >
+                        <FileText className="h-3.5 w-3.5" /> Consulter le programme
+                      </button>
                     )}
                   </div>
                 </div>
@@ -207,49 +239,53 @@ export function ElectionDetailPage() {
         })}
       </div>
 
-      {/* Action de confirmation */}
       {isOpen && !hasVoted && selectedCandidate && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pt-4 flex justify-center">
-          <button 
-            onClick={() => setShowConfirm(true)} 
-            className="btn-primary text-base px-8 py-4 rounded-2xl flex items-center gap-3 shadow-xl shadow-brand-600/30 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-500 hover:to-brand-600 text-white font-bold transition-all"
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="pt-2 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setShowConfirm(true)}
+            className="btn-primary text-sm px-8 py-3.5"
           >
-            <Vote className="h-5 w-5" /> Confirmer mon vote pour {selectedCandidate.display_name}
+            <Vote className="h-4 w-4" /> Confirmer mon vote pour {selectedCandidate.display_name}
           </button>
         </motion.div>
       )}
 
-      {/* Modal de Confirmation */}
       <Modal open={showConfirm} onClose={() => setShowConfirm(false)} title="Confirmation définitive du vote">
-        <div className="space-y-6">
-          <div className="rounded-2xl bg-amber-500/10 dark:bg-amber-950/30 p-5 border border-amber-500/30 backdrop-blur-md flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-900 dark:text-amber-200 leading-relaxed">
-              Vous êtes sur le point de valider votre vote pour <strong>{selectedCandidate?.display_name}</strong>. 
-              Conformément aux règles de sécurité, <strong>cette action est irréversible</strong> et votre choix sera anonymisé de manière définitive.
+        <div className="space-y-5">
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 p-4 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-950 dark:text-amber-200 leading-relaxed">
+              Vous allez valider votre vote pour <strong>{selectedCandidate?.display_name}</strong>. Cette action est{' '}
+              <strong>irréversible</strong> et votre choix reste strictement anonyme.
             </p>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setShowConfirm(false)} className="btn-secondary flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-800">Annuler</button>
-            <button onClick={handleVote} className="btn-primary flex-1 py-3 rounded-xl bg-brand-600 text-white font-bold" disabled={casting}>
-              {casting ? 'Chiffrement en cours...' : 'Voter définitivement'}
+            <button type="button" onClick={() => setShowConfirm(false)} className="btn-secondary flex-1">
+              Annuler
+            </button>
+            <button type="button" onClick={() => void handleVote()} className="btn-primary flex-1" disabled={casting}>
+              {casting ? 'Enregistrement…' : 'Voter définitivement'}
             </button>
           </div>
         </div>
       </Modal>
 
-      {/* Modal Programme Candidat */}
-      <Modal open={!!programCandidate} onClose={() => setProgramCandidate(null)} title={`Programme — ${programCandidate?.display_name}`}>
-        <div className="space-y-6">
-          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            Consultez le document officiel et la profession de foi déposés par le candidat auprès de l'administration.
+      <Modal
+        open={!!programCandidate}
+        onClose={() => setProgramCandidate(null)}
+        title={`Programme — ${programCandidate?.display_name}`}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            Consultez le document officiel et la profession de foi déposés par le candidat auprès de l’administration.
           </p>
           {programCandidate?.program_url && (
             <a
               href={programCandidate.program_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-primary w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-lg"
+              className="btn-primary w-full"
             >
               <ExternalLink className="h-4 w-4" /> Ouvrir le document officiel
             </a>

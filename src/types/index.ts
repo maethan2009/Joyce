@@ -323,6 +323,17 @@ export interface EventCheckin {
   scanned_by: string | null;
 }
 
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  title: string;
+  category: string;
+  type: string;
+  description: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
 export interface AppUser {
   id: string;
   email: string;

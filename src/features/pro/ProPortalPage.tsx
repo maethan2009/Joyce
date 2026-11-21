@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Briefcase, Loader2, MessageSquare, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PageMeta } from '@/components/PageMeta';
@@ -21,8 +21,11 @@ export function ProPortalPage() {
   const [courseForm, setCourseForm] = useState({ title: '', description: '', skills: '' });
   const [saving, setSaving] = useState(false);
 
-  const reload = async () => {
-    if (!user) return;
+  const reload = useCallback(async () => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [p, c, cert] = await Promise.all([
@@ -40,11 +43,11 @@ export function ProPortalPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, filter]);
 
   useEffect(() => {
     void reload();
-  }, [user?.id, filter]);
+  }, [reload]);
 
   if (profile?.account_status === 'pending') {
     return (
@@ -60,16 +63,15 @@ export function ProPortalPage() {
 
   const contact = async (ownerId: string) => {
     try {
-      const id = await messagingService.startConversation(
+      await messagingService.startConversation(
         ownerId,
         'Opportunité SkillLink Pro',
         'Bonjour, votre profil / projet m’intéresse. Pouvons-nous échanger ?',
       );
-      addToast('success', 'Conversation ouverte');
+      addToast('success', 'Conversation ouverte.');
       navigate('/messaging');
-      void id;
     } catch (ex) {
-      addToast('error', ex instanceof Error ? ex.message : 'Contact impossible');
+      addToast('error', ex instanceof Error ? ex.message : 'Contact impossible.');
     }
   };
 
@@ -86,11 +88,11 @@ export function ProPortalPage() {
           .map((s) => s.trim())
           .filter(Boolean),
       });
-      addToast('success', 'Cours publié');
+      addToast('success', 'Cours publié.');
       setCourseForm({ title: '', description: '', skills: '' });
       await reload();
     } catch (ex) {
-      addToast('error', ex instanceof Error ? ex.message : 'Erreur');
+      addToast('error', ex instanceof Error ? ex.message : 'Erreur lors de la publication.');
     } finally {
       setSaving(false);
     }
@@ -100,23 +102,29 @@ export function ProPortalPage() {
     if (!user) return;
     try {
       await proService.validateCertification(id, user.id);
-      addToast('success', 'Certification validée');
+      addToast('success', 'Certification validée.');
       await reload();
     } catch (ex) {
-      addToast('error', ex instanceof Error ? ex.message : 'Erreur');
+      addToast('error', ex instanceof Error ? ex.message : 'Erreur lors de la validation.');
     }
   };
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
       <PageMeta
-        title="SkillLink Pro"
-        description="Parcourez les projets étudiants, contactez des talents et validez des certifications."
+        title="Portail Pro & Formations"
+        description="Parcourez les projets étudiants, publiez des formations et validez des certifications."
       />
-      <header>
-        <h1 className="font-display text-2xl font-black text-slate-900 dark:text-slate-100">EduCampus SkillLink Pro</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          {profile?.company_name || 'Espace recruteurs & formateurs'}
+
+      <header className="border-b border-zinc-200 dark:border-zinc-800 pb-5">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-brand-600 dark:text-brand-400">
+          Pilier 4 · Portail Pro, Formations &amp; Administration
+        </p>
+        <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-zinc-950 dark:text-white mt-0.5">
+          EduCampus Portail Pro
+        </h1>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+          {profile?.company_name || 'Espace recruteurs, formateurs & certifications'}
         </p>
       </header>
 
@@ -124,11 +132,16 @@ export function ProPortalPage() {
         {(
           [
             ['talents', 'Talents & projets'],
-            ['cours', 'Cours & tutos'],
-            ['certifs', 'Certifications'],
+            ['cours', 'Formations publiées'],
+            ['certifs', 'Certifications à valider'],
           ] as const
         ).map(([id, label]) => (
-          <button key={id} type="button" className={tab === id ? 'btn-primary' : 'btn-secondary'} onClick={() => setTab(id)}>
+          <button
+            key={id}
+            type="button"
+            className={tab === id ? 'btn-primary' : 'btn-secondary'}
+            onClick={() => setTab(id)}
+          >
             {label}
           </button>
         ))}
@@ -138,21 +151,29 @@ export function ProPortalPage() {
         <>
           <input
             className="input-base max-w-md"
-            placeholder="Filtrer par compétence…"
+            placeholder="Filtrer par compétence, mot-clé…"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
           {loading ? (
-            <p className="text-sm text-slate-400 text-center py-10">Chargement…</p>
+            <div className="py-12 flex justify-center text-zinc-400">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
           ) : projects.length === 0 ? (
-            <EmptyState title="Aucun projet" description="Les offres SkillLink des étudiants apparaîtront ici." icon={Briefcase} />
+            <EmptyState
+              title="Aucun projet ou offre"
+              description="Les propositions SkillLink des étudiants apparaîtront ici dès publication."
+              icon={Briefcase}
+            />
           ) : (
-            <ul className="grid gap-3 sm:grid-cols-2">
+            <ul className="grid gap-4 sm:grid-cols-2">
               {projects.map((p) => (
-                <li key={p.id} className="card-base p-4 space-y-2">
-                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">{p.title}</h3>
-                  <p className="text-xs text-slate-500">{p.owner?.full_name || 'Étudiant'} · {p.category}</p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-3">{p.description}</p>
+                <li key={p.id} className="card-base p-5 space-y-2.5">
+                  <h3 className="font-display font-bold text-zinc-950 dark:text-white">{p.title}</h3>
+                  <p className="text-xs text-zinc-500">
+                    {p.owner?.full_name || 'Étudiant'} · {p.category}
+                  </p>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-3">{p.description}</p>
                   <button type="button" className="btn-primary mt-2" onClick={() => void contact(p.owner_id)}>
                     <MessageSquare className="h-4 w-4" /> Contacter
                   </button>
@@ -166,23 +187,39 @@ export function ProPortalPage() {
       {tab === 'cours' && (
         <div className="space-y-4">
           <form onSubmit={publishCourse} className="card-base p-5 space-y-3">
-            <h2 className="font-semibold">Publier un cours / tuto</h2>
-            <input className="input-base" placeholder="Titre" value={courseForm.title} onChange={(e) => setCourseForm({ ...courseForm, title: e.target.value })} required />
-            <textarea className="input-base" placeholder="Description" value={courseForm.description} onChange={(e) => setCourseForm({ ...courseForm, description: e.target.value })} />
-            <input className="input-base" placeholder="Compétences (séparées par des virgules)" value={courseForm.skills} onChange={(e) => setCourseForm({ ...courseForm, skills: e.target.value })} />
+            <h2 className="font-display font-bold text-zinc-950 dark:text-white">Publier une formation / atelier</h2>
+            <input
+              className="input-base"
+              placeholder="Titre"
+              value={courseForm.title}
+              onChange={(e) => setCourseForm({ ...courseForm, title: e.target.value })}
+              required
+            />
+            <textarea
+              className="input-base"
+              placeholder="Description"
+              value={courseForm.description}
+              onChange={(e) => setCourseForm({ ...courseForm, description: e.target.value })}
+            />
+            <input
+              className="input-base"
+              placeholder="Compétences (séparées par des virgules)"
+              value={courseForm.skills}
+              onChange={(e) => setCourseForm({ ...courseForm, skills: e.target.value })}
+            />
             <button type="submit" className="btn-primary" disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Publier
             </button>
           </form>
           {courses.length === 0 ? (
-            <EmptyState title="Aucun cours publié" />
+            <EmptyState title="Aucune formation publiée" />
           ) : (
             <ul className="space-y-2">
               {courses.map((c) => (
-                <li key={c.id} className="card-base px-4 py-3 text-sm">
-                  <strong>{c.title}</strong>
-                  <span className="text-slate-400"> · {c.status}</span>
+                <li key={c.id} className="card-base px-4 py-3 text-sm flex items-center justify-between">
+                  <strong className="text-zinc-950 dark:text-white">{c.title}</strong>
+                  <span className="text-xs text-zinc-500">{c.status}</span>
                 </li>
               ))}
             </ul>
@@ -192,14 +229,17 @@ export function ProPortalPage() {
 
       {tab === 'certifs' &&
         (certs.length === 0 ? (
-          <EmptyState title="Aucune certification en attente" description="Les demandes de validation apparaîtront ici." />
+          <EmptyState
+            title="Aucune certification en attente"
+            description="Les demandes de validation des étudiants apparaîtront ici."
+          />
         ) : (
           <ul className="space-y-3">
             {certs.map((c) => (
               <li key={c.id} className="card-base p-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="font-semibold">{c.title}</p>
-                  <p className="text-xs text-slate-500">{c.skills?.join(', ')}</p>
+                  <p className="font-semibold text-zinc-950 dark:text-white">{c.title}</p>
+                  <p className="text-xs text-zinc-500">{c.skills?.join(', ')}</p>
                 </div>
                 <button type="button" className="btn-primary" onClick={() => void validateCert(c.id)}>
                   <Check className="h-4 w-4" /> Valider

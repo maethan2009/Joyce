@@ -4,62 +4,61 @@ import { SiteFooter } from '@/components/SiteFooter';
 
 export function LegalPage() {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-[#F8F8F9] dark:bg-[#09090B] flex flex-col">
       <PageMeta
         title="Politique de confidentialité & CGU"
         description="Politique de confidentialité, cookies et conditions générales d’utilisation d’EduCampus."
       />
-      <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-4">
+      <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#111114] px-4 py-4">
         <div className="mx-auto max-w-3xl flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2.5">
             <img src="/logo-educampus-icon.svg" alt="EduCampus" className="h-9 w-9" width={36} height={36} />
-            <span className="font-display font-bold text-slate-900 dark:text-slate-100">EduCampus</span>
+            <span className="font-display font-bold text-zinc-950 dark:text-white">EduCampus</span>
           </Link>
-          <Link to="/" className="text-sm font-medium text-brand-600">
+          <Link to="/" className="text-sm font-semibold text-brand-600 dark:text-brand-400 hover:underline">
             Accueil
           </Link>
         </div>
       </header>
 
-      <main className="flex-1 mx-auto max-w-3xl px-4 py-10 prose prose-slate dark:prose-invert">
-        <h1 className="font-display text-2xl font-black text-slate-900 dark:text-slate-100 !mb-2">
-          Politique de confidentialité & Conditions générales
+      <main className="flex-1 mx-auto max-w-3xl px-4 py-10">
+        <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-zinc-950 dark:text-white">
+          Politique de confidentialité &amp; Conditions générales
         </h1>
-        <p className="text-sm text-slate-500 !mt-0">Dernière mise à jour : 21 novembre 2026</p>
+        <p className="text-sm text-zinc-500 mt-1">Dernière mise à jour : 21 novembre 2026</p>
 
-        <section className="mt-8 space-y-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-          <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">1. Responsable</h2>
+        <section className="mt-8 space-y-4 text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
+          <h2 className="font-display text-lg font-bold text-zinc-950 dark:text-white">1. Responsable &amp; Infrastructure</h2>
           <p>
             EduCampus est une plateforme académique multi-portails. Les données sont hébergées via Supabase
-            (base PostgreSQL avec politiques RLS). Aucune clé secrète serveur (`service_role`) n’est exposée
-            dans l’application cliente.
+            (base PostgreSQL protégée par politiques RLS). Aucune clé secrète serveur (<code>service_role</code>) n’est
+            exposée dans l’application cliente.
           </p>
 
-          <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">2. Données collectées</h2>
+          <h2 className="font-display text-lg font-bold text-zinc-950 dark:text-white">2. Données collectées</h2>
           <ul className="list-disc pl-5 space-y-1">
-            <li>Identifiants de compte (email, nom, rôle, matricule le cas échéant)</li>
-            <li>Données académiques et sociales que vous publiez volontairement</li>
-            <li>Logs techniques nécessaires à la sécurité et au rate limiting</li>
+            <li>Identifiants de compte (email, nom complet, rôle, matricule le cas échéant)</li>
+            <li>Données académiques et sociales publiées volontairement</li>
+            <li>Journaux techniques nécessaires à la sécurité et à la limitation d’abus</li>
           </ul>
 
-          <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">3. Cookies</h2>
+          <h2 className="font-display text-lg font-bold text-zinc-950 dark:text-white">3. Cookies</h2>
           <p>
-            Les cookies essentiels assurent l’authentification et les préférences (thème). La mesure
-            d’audience n’est activée qu’après acceptation explicite via le bandeau de consentement.
+            Les cookies essentiels assurent le maintien de session et les préférences d’affichage. La mesure
+            d’audience n’est activée qu’après consentement explicite.
           </p>
 
-          <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">4. Vos droits</h2>
+          <h2 className="font-display text-lg font-bold text-zinc-950 dark:text-white">4. Vos droits</h2>
           <p>
-            Vous pouvez demander l’accès, la rectification ou la suppression de vos données via les
-            paramètres de votre compte ou en contactant l’administrateur de votre établissement.
+            Vous pouvez consulter, rectifier ou demander la suppression de vos données depuis Accounts &amp; Settings ou
+            auprès de l’administrateur de votre établissement.
           </p>
 
-          <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">5. Conditions d’utilisation</h2>
+          <h2 className="font-display text-lg font-bold text-zinc-950 dark:text-white">5. Conditions d’utilisation</h2>
           <p>
-            L’usage d’EduCampus doit respecter le règlement intérieur de votre établissement. Les comptes
-            `school_admin` et `pro_recruiter` nécessitent une validation par le super administrateur avant
-            activation complète. Tout abus (spam, usurpation, contenu illicite) peut entraîner une
-            suspension.
+            L’usage d’EduCampus doit respecter le règlement intérieur de votre établissement. Les comptes{' '}
+            <code>school_admin</code> et <code>pro_recruiter</code> sont soumis à approbation préalable avant
+            activation complète.
           </p>
         </section>
       </main>

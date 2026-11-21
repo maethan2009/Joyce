@@ -1,549 +1,442 @@
-import { useState, useMemo, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Search,
-  Filter,
   Plus,
   Users,
   Briefcase,
-  Star,
   MessageSquare,
-  Sparkles,
-  CheckCircle2,
-  Tag,
-  Rocket,
-  Zap,
-  TrendingUp,
-  Award,
-  Clock,
   ArrowUpRight,
-  ShieldCheck,
-  Code2,
-  Terminal,
+  Loader2,
   Layers,
-  Send,
-  RefreshCw
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
+import { EmptyState } from '@/components/EmptyState';
+import { PageMeta } from '@/components/PageMeta';
+import { messagingService, skillService } from '@/services';
 import { useAppStore } from '@/store/useAppStore';
+import type { Profile, SkillCategory, SkillOffer } from '@/types';
 
-// Interfaces
-interface Project {
-  id: string;
-  title: string;
-  description: string;
-  ownerName: string;
-  ownerRole: string;
-  category: 'Réseaux & Web' | 'Design & UX' | 'Systèmes & DevOps' | 'Data & IA';
-  tags: string[];
-  membersNeeded: number;
-  membersCount: number;
-  status: 'recruiting' | 'in_progress' | 'completed';
-  featured?: boolean;
-}
+const categoryLabels: Record<SkillCategory, string> = {
+  tutoring: 'Tutorat & Entraide',
+  network_support: 'Réseaux & Systèmes',
+  graphic_design: 'Design & Interface',
+  other: 'Autre / Projet',
+};
 
-interface Peer {
-  id: string;
-  name: string;
-  specialty: string;
-  level: string;
-  skills: string[];
-  synergyScore: number;
-  availability: 'Disponible' | 'Occupé' | 'Recherche Projet';
-  projectsCompleted: number;
-}
-
-interface ServiceOffer {
-  id: string;
-  title: string;
-  provider: string;
-  category: string;
-  description: string;
-  tags: string[];
-  type: 'Offre d\'entraide' | 'Mission Freelance';
-}
+const statusLabels: Record<SkillOffer['status'], string> = {
+  open: 'Ouvert',
+  in_progress: 'En cours',
+  closed: 'Clôturé',
+};
 
 export function SkillLinkPage() {
+  const user = useAppStore((s) => s.user);
   const addToast = useAppStore((s) => s.addToast);
+  const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'projects' | 'peers' | 'services'>('projects');
+  const [activeTab, setActiveTab] = useState<'offers' | 'talents'>('offers');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | SkillCategory>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // États dynamiques prêts pour Supabase (initialisés à vide)
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [peers, setPeers] = useState<Peer[]>([]);
-  const [services, setServices] = useState<ServiceOffer[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [offers, setOffers] = useState<SkillOffer[]>([]);
+  const [talents, setTalents] = useState<Profile[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Form State pour la création de projet
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const [newCategory, setNewCategory] = useState<'Réseaux & Web' | 'Design & UX' | 'Systèmes & DevOps' | 'Data & IA'>('Réseaux & Web');
-  const [newTags, setNewTags] = useState('');
-  const [newMembersNeeded, setNewMembersNeeded] = useState(2);
+  const [newCategory, setNewCategory] = useState<SkillCategory>('tutoring');
 
-  // Chargement des données depuis Supabase (Prêt pour implémentation)
-  useEffect(() => {
-    async function fetchSkillLinkData() {
-      setIsLoading(true);
-      try {
-        // TODO: Remplacer par de vrais fetchs Supabase
-        // const { data: projectsData } = await supabase.from('projects').select('*');
-        // const { data: peersData } = await supabase.from('profiles').select('*');
-        // const { data: servicesData } = await supabase.from('services').select('*');
-
-        // Simulation d'un retour vide ou en attente de BDD
-        setProjects([]);
-        setPeers([]);
-        setServices([]);
-      } catch (error) {
-        addToast('error', 'Erreur lors du chargement des données SkillLink.');
-      } finally {
-        setIsLoading(false);
-      }
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [offerList, talentList] = await Promise.all([
+        skillService.listOffers(selectedCategory),
+        skillService.listTalentProfiles(),
+      ]);
+      setOffers(offerList);
+      setTalents(talentList.filter((p) => p.id !== user?.id));
+    } catch {
+      setOffers([]);
+      setTalents([]);
+    } finally {
+      setIsLoading(false);
     }
+  }, [selectedCategory, user?.id]);
 
-    fetchSkillLinkData();
-  }, []);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
-  // Filtrage des projets
-  const filteredProjects = useMemo(() => {
-    return projects.filter((p) => {
-      const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            p.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
-      return matchesSearch && matchesCategory;
+  const filteredOffers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return offers.filter((o) => {
+      if (!q) return true;
+      return (
+        o.title.toLowerCase().includes(q) ||
+        o.description.toLowerCase().includes(q) ||
+        (o.owner?.full_name ?? '').toLowerCase().includes(q)
+      );
     });
-  }, [projects, searchQuery, selectedCategory]);
+  }, [offers, searchQuery]);
 
-  const handleCreateProject = () => {
-    if (!newTitle || !newDesc) {
-      addToast('error', 'Veuillez remplir tous les champs obligatoires.');
+  const filteredTalents = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return talents.filter((t) => {
+      if (!q) return true;
+      return (
+        t.full_name.toLowerCase().includes(q) ||
+        (t.headline ?? '').toLowerCase().includes(q) ||
+        (t.filiere ?? '').toLowerCase().includes(q) ||
+        (t.skills ?? []).some((sk) => sk.toLowerCase().includes(q))
+      );
+    });
+  }, [talents, searchQuery]);
+
+  const handleCreateOffer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    if (!newTitle.trim() || !newDesc.trim()) {
+      addToast('error', 'Veuillez remplir le titre et la description.');
       return;
     }
+    setSubmitting(true);
+    try {
+      const created = await skillService.createOffer(user.id, {
+        category: newCategory,
+        title: newTitle.trim(),
+        description: newDesc.trim(),
+      });
+      setOffers((prev) => [created, ...prev]);
+      addToast('success', 'Offre publiée sur SkillLink.');
+      setShowCreateModal(false);
+      setNewTitle('');
+      setNewDesc('');
+      setNewCategory('tutoring');
+    } catch (ex) {
+      addToast('error', ex instanceof Error ? ex.message : 'Publication impossible.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-    // TODO: Insérer dans Supabase
-    // await supabase.from('projects').insert([{ title: newTitle, description: newDesc, category: newCategory, ... }]);
-
-    const createdProject: Project = {
-      id: Date.now().toString(),
-      title: newTitle,
-      description: newDesc,
-      ownerName: 'Moi (Utilisateur Connecté)',
-      ownerRole: 'Porteur de Projet',
-      category: newCategory,
-      tags: newTags ? newTags.split(',').map(t => t.trim()) : ['Général'],
-      membersNeeded: newMembersNeeded,
-      membersCount: 1,
-      status: 'recruiting'
-    };
-
-    setProjects([createdProject, ...projects]);
-    addToast('success', 'Votre projet a été publié avec succès sur SkillLink !');
-    setShowCreateModal(false);
-    setNewTitle('');
-    setNewDesc('');
-    setNewTags('');
+  const handleContactMember = async (targetUserId: string, subject: string) => {
+    if (!user) return;
+    if (targetUserId === user.id) {
+      addToast('info', 'Il s’agit de votre propre publication.');
+      return;
+    }
+    try {
+      await messagingService.startConversation(
+        targetUserId,
+        subject,
+        `Bonjour, je souhaite échanger avec vous à propos de : ${subject}.`,
+      );
+      addToast('success', 'Conversation ouverte.');
+      navigate('/messaging');
+    } catch (ex) {
+      addToast('error', ex instanceof Error ? ex.message : 'Impossible d’ouvrir la conversation.');
+    }
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 lg:px-8 space-y-8">
-      {/* EN-TÊTE PRINCIPAL */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 border-b border-slate-200 dark:border-slate-800 pb-6">
+    <div className="mx-auto max-w-6xl px-4 py-8 lg:px-8 space-y-6">
+      <PageMeta
+        title="SkillLink Hub"
+        description="Offres de compétences, entraide étudiante et annuaire des talents vérifiés."
+      />
+
+      <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5">
         <div>
-          <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-semibold text-xs uppercase tracking-wider mb-1">
-            <Zap className="h-4 w-4" /> Réseau d'Excellence & Synergie Étudiante
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-brand-600 dark:text-brand-400">
+            Pilier 3 · EduAmis &amp; Synergie
+          </p>
+          <h1 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-zinc-950 dark:text-white mt-0.5">
             SkillLink Hub
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Collaborez sur des projets concrets, trouvez vos coéquipiers techniques et valorisez vos compétences.
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+            Publiez vos offres de services ou collaborations et contactez directement les talents du campus.
           </p>
         </div>
 
         <button
+          type="button"
           onClick={() => setShowCreateModal(true)}
-          className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xs font-semibold shadow-md hover:shadow-indigo-500/20 transition-all flex items-center gap-2 self-start md:self-auto cursor-pointer"
+          className="btn-primary self-start md:self-auto"
         >
-          <Plus className="h-4 w-4" /> Proposer un Projet
+          <Plus className="h-4 w-4" /> Publier une offre
         </button>
-      </div>
+      </header>
 
-      {/* STATS RAPIDES EN BANDEAU */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
-              <Briefcase className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Projets Actifs</p>
-              <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{projects.length} en cours</p>
-            </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="card-base p-4 flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-brand-50 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-900">
+            <Briefcase className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Offres actives</p>
+            <p className="text-lg font-extrabold text-zinc-950 dark:text-white tabular-nums">{offers.length}</p>
           </div>
         </div>
 
-        <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-              <Users className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Talents Inscrits</p>
-              <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{peers.length} Profils</p>
-            </div>
+        <div className="card-base p-4 flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800">
+            <Users className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Talents approuvés</p>
+            <p className="text-lg font-extrabold text-zinc-950 dark:text-white tabular-nums">{talents.length}</p>
           </div>
         </div>
 
-        <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Taux de Synergie</p>
-              <p className="text-lg font-bold text-slate-900 dark:text-slate-100">Synchronisation</p>
-            </div>
+        <div className="card-base p-4 flex items-center gap-3 col-span-2 sm:col-span-1">
+          <div className="p-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800">
+            <Layers className="h-5 w-5" />
           </div>
-        </div>
-
-        <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400">
-              <Award className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Services</p>
-              <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{services.length} Actifs</p>
-            </div>
+          <div>
+            <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Catégories</p>
+            <p className="text-lg font-extrabold text-zinc-950 dark:text-white tabular-nums">4 pôles</p>
           </div>
         </div>
       </div>
 
-      {/* NAVIGATION D'ONGLETS ET FILTRES */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex bg-slate-100 dark:bg-slate-900 p-1.5 rounded-2xl overflow-x-auto">
-          {[
-            { id: 'projects', label: 'Projets Collaboratifs', icon: Briefcase },
-            { id: 'peers', label: 'Annuaire & Synergie', icon: Users },
-            { id: 'services', label: 'Services & Entraide', icon: Rocket }
-          ].map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                  activeTab === tab.id
-                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="flex gap-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 p-1 border border-zinc-200 dark:border-zinc-800 w-fit">
+          <button
+            type="button"
+            onClick={() => setActiveTab('offers')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-semibold transition-colors ${
+              activeTab === 'offers'
+                ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white'
+            }`}
+          >
+            <Briefcase className="h-4 w-4" /> Offres &amp; Projets
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('talents')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-semibold transition-colors ${
+              activeTab === 'talents'
+                ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white'
+            }`}
+          >
+            <Users className="h-4 w-4" /> Annuaire des talents
+          </button>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          {activeTab === 'projects' && (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          {activeTab === 'offers' && (
             <select
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full sm:w-auto px-3 py-2 rounded-xl text-xs bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none"
+              onChange={(e) => setSelectedCategory(e.target.value as 'all' | SkillCategory)}
+              className="input-base sm:w-52 text-xs"
             >
               <option value="all">Toutes les catégories</option>
-              <option value="Réseaux & Web">Réseaux & Web</option>
-              <option value="Design & UX">Design & UX</option>
-              <option value="Systèmes & DevOps">Systèmes & DevOps</option>
-              <option value="Data & IA">Data & IA</option>
+              {(Object.keys(categoryLabels) as SkillCategory[]).map((key) => (
+                <option key={key} value={key}>
+                  {categoryLabels[key]}
+                </option>
+              ))}
             </select>
           )}
 
           <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
             <input
               type="text"
-              placeholder="Rechercher techno, compétence..."
+              placeholder="Rechercher compétence, mot-clé…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900 dark:text-slate-100"
+              className="input-base pl-10 text-xs"
             />
           </div>
         </div>
       </div>
 
-      {/* CONTENU : ONGLET 1 - PROJETS COLLABORATIFS */}
-      {activeTab === 'projects' && (
-        <div>
-          {filteredProjects.length === 0 ? (
-            <div className="text-center py-16 bg-slate-50 dark:bg-slate-900/40 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
-              <Briefcase className="w-10 h-10 text-slate-400 mx-auto" />
-              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">Aucun projet collaboratif pour le moment</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">Soyez le premier à proposer un projet et à recruter vos coéquipiers depuis l'IAI-Cameroun !</p>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-md transition-all cursor-pointer"
-              >
-                Proposer un Projet
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredProjects.map((project) => (
-                <Card
-                  key={project.id}
-                  className={`p-6 space-y-5 border-slate-200/80 dark:border-slate-800 flex flex-col justify-between relative overflow-hidden hover:shadow-lg transition-all ${
-                    project.featured ? 'ring-1 ring-indigo-500/30' : ''
-                  }`}
-                >
-                  {project.featured && (
-                    <div className="absolute top-0 right-0 bg-gradient-to-l from-indigo-600 to-violet-600 text-white text-[9px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-wider">
-                      Projet Vedette
-                    </div>
-                  )}
+      {isLoading ? (
+        <div className="py-16 flex justify-center text-zinc-400">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      ) : activeTab === 'offers' ? (
+        filteredOffers.length === 0 ? (
+          <EmptyState
+            title="Aucune offre publiée"
+            description="Publiez la première proposition de collaboration ou de service sur SkillLink."
+            icon={Briefcase}
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredOffers.map((offer) => (
+              <Card key={offer.id} className="p-5 flex flex-col justify-between gap-4">
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md bg-brand-50 dark:bg-brand-950/50 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-900 text-[10px] font-bold uppercase tracking-wider">
+                      {categoryLabels[offer.category] ?? offer.category}
+                    </span>
+                    <span className="text-[11px] font-semibold text-zinc-500">
+                      {statusLabels[offer.status] ?? offer.status}
+                    </span>
+                  </div>
 
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold uppercase">
-                        {project.category}
-                      </span>
-                      <span className="text-xs text-slate-400">
-                        {project.membersCount} / {project.membersCount + project.membersNeeded} Membres
-                      </span>
-                    </div>
+                  <h3 className="font-display text-base font-bold text-zinc-950 dark:text-white leading-snug">
+                    {offer.title}
+                  </h3>
 
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 leading-snug">
-                      {project.title}
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-3 leading-relaxed">
+                    {offer.description}
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="h-8 w-8 shrink-0 rounded-lg bg-zinc-950 dark:bg-zinc-800 text-white flex items-center justify-center font-bold text-xs">
+                      {(offer.owner?.full_name || '?').charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-zinc-950 dark:text-white truncate">
+                        {offer.owner?.full_name || 'Membre EduCampus'}
+                      </p>
+                      <p className="text-[10px] text-zinc-500 truncate">
+                        {offer.owner?.filiere || offer.owner?.headline || 'Profil vérifié'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleContactMember(offer.owner_id, offer.title)}
+                    className="btn-primary px-3 py-1.5 text-xs"
+                  >
+                    Contacter <ArrowUpRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )
+      ) : filteredTalents.length === 0 ? (
+        <EmptyState
+          title="Aucun talent trouvé"
+          description="Aucun profil approuvé ne correspond à votre recherche pour le moment."
+          icon={Users}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredTalents.map((talent) => (
+            <Card key={talent.id} className="p-5 flex flex-col justify-between gap-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-11 w-11 shrink-0 rounded-lg bg-brand-600 text-white flex items-center justify-center font-bold text-sm">
+                    {talent.full_name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-display font-bold text-zinc-950 dark:text-white text-sm truncate">
+                      {talent.full_name}
                     </h3>
-
-                    <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-3 leading-relaxed">
-                      {project.description}
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+                      {talent.headline || talent.filiere || talent.role}
                     </p>
-
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {project.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 text-[10px] font-mono font-semibold"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
                   </div>
+                </div>
 
-                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="h-8 w-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">
-                        {project.ownerName.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{project.ownerName}</p>
-                        <p className="text-[10px] text-slate-400">{project.ownerRole}</p>
-                      </div>
-                    </div>
+                {talent.bio && (
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2">{talent.bio}</p>
+                )}
 
-                    <button
-                      onClick={() => addToast('success', `Candidature transmise à ${project.ownerName} !`)}
-                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1 cursor-pointer"
-                    >
-                      Postuler <ArrowUpRight className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* CONTENU : ONGLET 2 - ANNUAIRE DES TALENTS */}
-      {activeTab === 'peers' && (
-        <div>
-          {peers.length === 0 ? (
-            <div className="text-center py-16 bg-slate-50 dark:bg-slate-900/40 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
-              <Users className="w-10 h-10 text-slate-400 mx-auto" />
-              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">Annuaire des talents en attente de synchronisation</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">Les profils des étudiants inscrits apparaîtront ici dès la connexion à la base de données.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {peers.map((peer) => (
-                <Card key={peer.id} className="p-6 space-y-5 border-slate-200/80 dark:border-slate-800 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
-                        {peer.name.charAt(0)}
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">{peer.name}</h3>
-                        <p className="text-[11px] text-slate-500">{peer.specialty}</p>
-                        <span className="text-[10px] text-indigo-500 font-semibold">{peer.level}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-indigo-50/50 dark:bg-indigo-950/30 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Compatibilité Synergie</span>
-                    </div>
-                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{peer.synergyScore}%</span>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Compétences clés</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {peer.skills.map((skill) => (
-                        <span key={skill} className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-medium">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                      peer.availability === 'Disponible' ? 'bg-emerald-500/10 text-emerald-600' :
-                      peer.availability === 'Recherche Projet' ? 'bg-amber-500/10 text-amber-600' : 'bg-slate-500/10 text-slate-500'
-                    }`}>
-                      {peer.availability}
-                    </span>
-
-                    <button
-                      onClick={() => addToast('info', `Invitation à collaborer envoyée à ${peer.name}.`)}
-                      className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-semibold text-slate-800 dark:text-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <MessageSquare className="h-3.5 w-3.5" /> Contacter
-                    </button>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* CONTENU : ONGLET 3 - SERVICES & ENTRAIDE */}
-      {activeTab === 'services' && (
-        <div>
-          {services.length === 0 ? (
-            <div className="text-center py-16 bg-slate-50 dark:bg-slate-900/40 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
-              <Rocket className="w-10 h-10 text-slate-400 mx-auto" />
-              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">Aucun service ou offre d'entraide actif</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">Proposez votre aide ou vos compétences en freelance pour dynamiser la communauté.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {services.map((service) => (
-                <Card key={service.id} className="p-6 space-y-4 border-slate-200/80 dark:border-slate-800">
-                  <div className="flex justify-between items-start">
-                    <span className="px-2.5 py-1 rounded-lg bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 text-[10px] font-bold uppercase">
-                      {service.type}
-                    </span>
-                    <span className="text-xs font-semibold text-slate-500">{service.category}</span>
-                  </div>
-
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">{service.title}</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{service.description}</p>
-                  </div>
-
+                {talent.skills?.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
-                    {service.tags.map((t) => (
-                      <span key={t} className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-slate-600 dark:text-slate-300">
-                        #{t}
+                    {talent.skills.slice(0, 6).map((skill) => (
+                      <span
+                        key={skill}
+                        className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[10px] font-medium"
+                      >
+                        {skill}
                       </span>
                     ))}
                   </div>
+                )}
+              </div>
 
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Proposé par : <strong>{service.provider}</strong></span>
-                    <button
-                      onClick={() => addToast('success', 'Demande envoyée au prestataire !')}
-                      className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors cursor-pointer"
-                    >
-                      Solliciter
-                    </button>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
+              <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => void handleContactMember(talent.id, `Échange SkillLink — ${talent.full_name}`)}
+                  className="btn-secondary px-3 py-1.5 text-xs"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" /> Contacter
+                </button>
+              </div>
+            </Card>
+          ))}
         </div>
       )}
 
-      {/* MODAL DE CRÉATION DE PROJET */}
-      <Modal open={showCreateModal} onClose={() => setShowCreateModal(false)} title="Publier un Nouveau Projet Collaboratif">
-        <div className="space-y-4 text-xs">
+      <Modal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Publier une offre sur SkillLink"
+      >
+        <form onSubmit={handleCreateOffer} className="space-y-4 text-sm">
           <div>
-            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Titre du Projet *</label>
+            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+              Titre de l’offre *
+            </label>
             <input
               type="text"
-              placeholder="ex: Application Web de Gestion des Notes React/C++..."
+              placeholder="ex. Tutorat React / TypeScript ou Architecture Réseau"
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 dark:text-slate-100"
+              className="input-base"
+              required
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Domaine / Catégorie</label>
+            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+              Catégorie
+            </label>
             <select
               value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value as any)}
-              className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 dark:text-slate-100"
+              onChange={(e) => setNewCategory(e.target.value as SkillCategory)}
+              className="input-base"
             >
-              <option value="Réseaux & Web">Réseaux & Web</option>
-              <option value="Design & UX">Design & UX</option>
-              <option value="Systèmes & DevOps">Systèmes & DevOps</option>
-              <option value="Data & IA">Data & IA</option>
+              {(Object.keys(categoryLabels) as SkillCategory[]).map((key) => (
+                <option key={key} value={key}>
+                  {categoryLabels[key]}
+                </option>
+              ))}
             </select>
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Tags / Technologies (séparés par des virgules)</label>
-            <input
-              type="text"
-              placeholder="ex: React, Supabase, Tailwind, Linux..."
-              value={newTags}
-              onChange={(e) => setNewTags(e.target.value)}
-              className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 dark:text-slate-100"
-            />
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Description & Profils recherchés *</label>
+            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+              Description détaillée *
+            </label>
             <textarea
               rows={4}
-              placeholder="Exposez les objectifs du projet et les compétences requises..."
+              placeholder="Présentez l’objectif, les compétences attendues ou proposées…"
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
-              className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-transparent focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 dark:text-slate-100"
+              className="input-base"
+              required
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <button
-              onClick={() => setShowCreateModal(false)}
-              className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"
-            >
+          <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+            <button type="button" onClick={() => setShowCreateModal(false)} className="btn-secondary">
               Annuler
             </button>
-            <button
-              onClick={handleCreateProject}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md cursor-pointer"
-            >
-              Publier l'Annonce
+            <button type="submit" className="btn-primary" disabled={submitting}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Publier l’offre
             </button>
           </div>
-        </div>
+        </form>
       </Modal>
     </div>
   );

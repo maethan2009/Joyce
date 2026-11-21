@@ -40,22 +40,23 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+            transition={{ duration: 0.18 }}
+            className="absolute inset-0 bg-zinc-950/70 backdrop-blur-sm"
             onClick={onClose}
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className={`relative w-full ${sizeMap[size]} card-base max-h-[90vh] overflow-y-auto`}
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className={`relative w-full ${sizeMap[size]} card-base max-h-[90vh] overflow-y-auto shadow-cabinet`}
             role="dialog"
             aria-modal="true"
           >
             {title && (
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-6 py-4">
-                <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">{title}</h2>
-                <button onClick={onClose} className="btn-ghost -mr-2 p-2" aria-label="Close">
+              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
+                <h2 className="font-display text-lg font-bold text-zinc-950 dark:text-zinc-50">{title}</h2>
+                <button onClick={onClose} className="btn-ghost -mr-2 p-2" aria-label="Fermer">
                   <X className="h-5 w-5" />
                 </button>
               </div>

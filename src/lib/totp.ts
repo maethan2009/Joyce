@@ -29,16 +29,27 @@ export function generateTotpCode(secret: string): string {
   return totp.generate();
 }
 
+export function isValidBase32Secret(secret?: string | null): boolean {
+  if (!secret) return false;
+  const cleaned = secret.trim().toUpperCase();
+  return cleaned.length >= 16 && /^[A-Z2-7]+=*$/.test(cleaned);
+}
+
 export function verifyTotpCode(secret: string, code: string): boolean {
-  const totp = new OTPAuth.TOTP({
-    issuer: 'EduCampus',
-    algorithm: 'SHA1',
-    digits: 6,
-    period: 30,
-    secret: OTPAuth.Secret.fromBase32(secret),
-  });
-  const delta = totp.validate({ token: code, window: 1 });
-  return delta !== null;
+  if (!isValidBase32Secret(secret)) return false;
+  try {
+    const totp = new OTPAuth.TOTP({
+      issuer: 'EduCampus',
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      secret: OTPAuth.Secret.fromBase32(secret.trim().toUpperCase()),
+    });
+    const delta = totp.validate({ token: code.trim(), window: 1 });
+    return delta !== null;
+  } catch {
+    return false;
+  }
 }
 
 export function useDynamicTotp(secretBase32: string, matricule: string) {

@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { MotionConfig } from 'framer-motion';
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { CookieBanner } from './components/CookieBanner';
 import { Analytics } from './components/Analytics';
-import { useAppStore } from './store/useAppStore';
+import { getDefaultRouteForRole, useAppStore } from './store/useAppStore';
 import { ToastContainer } from './components/ui/Toast';
 
 const LandingPage = lazy(() =>
@@ -68,106 +69,138 @@ const LegalPage = lazy(() => import('./features/legal/LegalPage').then((m) => ({
 
 function RouteFallback() {
   return (
-    <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-400">Chargement…</div>
+    <div className="flex min-h-[40vh] items-center justify-center text-sm text-zinc-500 dark:text-zinc-400">
+      Chargement…
+    </div>
   );
 }
 
 export function App() {
   const user = useAppStore((s) => s.user);
+  const profile = useAppStore((s) => s.profile);
   const bootstrapSession = useAppStore((s) => s.bootstrapSession);
+
   useEffect(() => {
     void bootstrapSession();
   }, [bootstrapSession]);
 
   return (
-    <BrowserRouter>
-      <CookieBanner />
-      <Analytics />
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
-          <Route path="/legal" element={<LegalPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/enroll" element={<EnrollPage />} />
-          <Route path="/forbidden" element={<ForbiddenPage />} />
-          <Route path="/403" element={<ForbiddenPage />} />
+    <MotionConfig reducedMotion="user">
+      <BrowserRouter>
+        <CookieBanner />
+        <Analytics />
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route
+              path="/"
+              element={user ? <Navigate to={getDefaultRouteForRole(profile?.role)} replace /> : <LandingPage />}
+            />
+            <Route path="/legal" element={<LegalPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/enroll" element={<EnrollPage />} />
+            <Route path="/forbidden" element={<ForbiddenPage />} />
+            <Route path="/403" element={<ForbiddenPage />} />
 
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <Suspense fallback={<RouteFallback />}>
-                    <Routes>
-                      <Route path="/dashboard" element={<DashboardView />} />
-                      <Route path="/events" element={<EventsPage />} />
-                      <Route
-                        path="/elections"
-                        element={
-                          <ProtectedRoute roles={['student_verified', 'student', 'school_admin', 'super_admin', 'election_admin', 'campus_admin']}>
-                            <ElectionListPage />
-                          </ProtectedRoute>
-                        }
-                      />
-                      <Route path="/elections/:id" element={<ElectionDetailPage />} />
-                      <Route path="/elections/:id/results" element={<ElectionResultsPage />} />
-                      <Route
-                        path="/student-card"
-                        element={
-                          <ProtectedRoute roles={['student_verified', 'student', 'super_admin', 'campus_admin']}>
-                            <StudentCardPage />
-                          </ProtectedRoute>
-                        }
-                      />
-                      <Route
-                        path="/hub"
-                        element={
-                          <ProtectedRoute roles={['student_verified', 'student', 'school_admin', 'super_admin', 'campus_admin']}>
-                            <AcademicHubPage />
-                          </ProtectedRoute>
-                        }
-                      />
-                      <Route path="/skilllink" element={<SkillLinkPage />} />
-                      <Route path="/mentorship" element={<Navigate to="/events" replace />} />
-                      <Route path="/orientation" element={<OrientationPage />} />
-                      <Route path="/eduamis" element={<EduAmisPage />} />
-                      <Route path="/messaging" element={<MessagingPage />} />
-                      <Route
-                        path="/admin"
-                        element={
-                          <ProtectedRoute roles={['super_admin']}>
-                            <SuperAdminPage />
-                          </ProtectedRoute>
-                        }
-                      />
-                      <Route
-                        path="/school"
-                        element={
-                          <ProtectedRoute roles={['school_admin', 'super_admin']}>
-                            <SchoolAdminPage />
-                          </ProtectedRoute>
-                        }
-                      />
-                      <Route
-                        path="/pro"
-                        element={
-                          <ProtectedRoute roles={['pro_recruiter', 'super_admin']}>
-                            <ProPortalPage />
-                          </ProtectedRoute>
-                        }
-                      />
-                      <Route path="/settings" element={<SettingsPage />} />
-                      <Route path="*" element={<NotFoundPage />} />
-                    </Routes>
-                  </Suspense>
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </Suspense>
-      <ToastContainer />
-    </BrowserRouter>
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <Suspense fallback={<RouteFallback />}>
+                      <Routes>
+                        {/* Pilier 1 : Espace Académique & Vie de Campus */}
+                        <Route path="/dashboard" element={<DashboardView />} />
+                        <Route path="/events" element={<EventsPage />} />
+                        <Route
+                          path="/elections"
+                          element={
+                            <ProtectedRoute roles={['student_verified', 'student', 'school_admin', 'super_admin', 'election_admin', 'campus_admin']}>
+                              <ElectionListPage />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/elections/:id"
+                          element={
+                            <ProtectedRoute roles={['student_verified', 'student', 'school_admin', 'super_admin', 'election_admin', 'campus_admin']}>
+                              <ElectionDetailPage />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/elections/:id/results"
+                          element={
+                            <ProtectedRoute roles={['student_verified', 'student', 'school_admin', 'super_admin', 'election_admin', 'campus_admin']}>
+                              <ElectionResultsPage />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/student-card"
+                          element={
+                            <ProtectedRoute roles={['student_verified', 'student', 'super_admin', 'campus_admin']}>
+                              <StudentCardPage />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/hub"
+                          element={
+                            <ProtectedRoute roles={['student_verified', 'student', 'school_admin', 'super_admin', 'campus_admin']}>
+                              <AcademicHubPage />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route path="/mentorship" element={<MentorshipPage />} />
+
+                        {/* Pilier 2 : Orientation & Avenir */}
+                        <Route path="/orientation" element={<OrientationPage />} />
+
+                        {/* Pilier 3 : EduAmis & Messagerie */}
+                        <Route path="/eduamis" element={<EduAmisPage />} />
+                        <Route path="/skilllink" element={<SkillLinkPage />} />
+                        <Route path="/messaging" element={<MessagingPage />} />
+
+                        {/* Pilier 4 : Portail Pro, Formations & Administration */}
+                        <Route
+                          path="/admin"
+                          element={
+                            <ProtectedRoute roles={['super_admin']}>
+                              <SuperAdminPage />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/school"
+                          element={
+                            <ProtectedRoute roles={['school_admin', 'super_admin']}>
+                              <SchoolAdminPage />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/pro"
+                          element={
+                            <ProtectedRoute roles={['pro_recruiter', 'super_admin']}>
+                              <ProPortalPage />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        {/* Comptes & Paramètres */}
+                        <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="*" element={<NotFoundPage />} />
+                      </Routes>
+                    </Suspense>
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </Suspense>
+        <ToastContainer />
+      </BrowserRouter>
+    </MotionConfig>
   );
 }
 

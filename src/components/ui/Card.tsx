@@ -11,7 +11,11 @@ export function Card({ children, interactive, className = '', onClick }: CardPro
   return (
     <div
       onClick={onClick}
-      className={`card-base p-5 ${interactive ? 'cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover' : ''} ${className}`}
+      className={`card-base p-5 ${
+        interactive
+          ? 'cursor-pointer transition-colors duration-150 hover:border-brand-600/60 dark:hover:border-brand-500/60'
+          : ''
+      } ${className}`}
     >
       {children}
     </div>
