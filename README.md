@@ -1,2 +1,2 @@
-# Joyce
-Blablabla 
+# EduCampus
+Plateforme educative
